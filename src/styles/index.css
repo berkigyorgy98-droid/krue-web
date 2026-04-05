@@ -1,0 +1,18 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+
+@keyframes bounce-subtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+.animate-subtle {
+  animation: bounce-subtle 1.5s infinite ease-in-out;
+}
+html {
+  scroll-behavior: smooth;
+}
