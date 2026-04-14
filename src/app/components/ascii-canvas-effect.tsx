@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import exampleImage from '../assets/KRUE1.jpg'
 
 export function AsciiCanvasEffect() {
@@ -9,8 +9,14 @@ export function AsciiCanvasEffect() {
   const mouseRef = useRef({ x: -1000, y: -1000 })
   const prevMouseRef = useRef({ x: -1000, y: -1000 })
   const physicsRef = useRef<Float32Array | null>(null)
-  
   const extraParticlesRef = useRef<any[]>([])
+  
+  const cachedImageDataRef = useRef<Uint8ClampedArray | null>(null)
+  
+  const [isVisible, setIsVisible] = useState(false);
+
+  const introRef = useRef(1.0)
+  const hasPlayedIntroRef = useRef(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -22,12 +28,30 @@ export function AsciiCanvasEffect() {
 
     const chars = [' ', '.', ':', '-', '=', '+', '*', '#', '%', '@']
     let time = 0
+    const cellSize = 9
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
       physicsRef.current = null 
       extraParticlesRef.current = [] 
+
+      if (img.complete && canvas.width > 0 && canvas.height > 0) {
+        const cols = Math.floor(canvas.width / cellSize)
+        const rows = Math.floor(canvas.height / cellSize)
+        
+        if (cols > 0 && rows > 0) {
+          const tempCanvas = document.createElement('canvas')
+          tempCanvas.width = cols
+          tempCanvas.height = rows
+          const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
+          
+          if (tempCtx) {
+            tempCtx.drawImage(img, 0, 0, img.width, img.height, 0, 0, cols, rows)
+            cachedImageDataRef.current = tempCtx.getImageData(0, 0, cols, rows).data
+          }
+        }
+      }
     }
 
     const random = (seed: number) => {
@@ -39,14 +63,28 @@ export function AsciiCanvasEffect() {
       if (!img.complete) return
       if (canvas.width === 0 || canvas.height === 0) return
 
-      const cellSize = 6
-      const cols = Math.floor(canvas.width / cellSize)
-      const rows = Math.floor(canvas.height / cellSize)
+      const cols = (canvas.width / cellSize) | 0
+      const rows = (canvas.height / cellSize) | 0
 
       if (cols === 0 || rows === 0) return
 
+      const imageDataArray = cachedImageDataRef.current;
+      if (!imageDataArray || imageDataArray.length !== cols * rows * 4) return;
+
       if (!physicsRef.current || physicsRef.current.length !== cols * rows * 4) {
         physicsRef.current = new Float32Array(cols * rows * 4)
+        
+        if (!hasPlayedIntroRef.current) {
+          const phys = physicsRef.current;
+          for (let i = 0; i < cols * rows; i++) {
+            // --- GYORSÍTÁS 1: Kisebb kezdőtávolság (4000 -> 2500) és picit gyorsabb pörgés ---
+            phys[i * 4] = (Math.random() - 0.5) * 2500;     
+            phys[i * 4 + 1] = (Math.random() - 0.5) * 2500; 
+            phys[i * 4 + 2] = (Math.random() - 0.5) * 300;  
+            phys[i * 4 + 3] = (Math.random() - 0.5) * 300;  
+          }
+          hasPlayedIntroRef.current = true;
+        }
       }
       const phys = physicsRef.current
 
@@ -60,20 +98,6 @@ export function AsciiCanvasEffect() {
       const offsetX = (canvas.width - scaledWidth) / 2
       const offsetY = (canvas.height - scaledHeight) / 2
 
-      const tempCanvas = document.createElement('canvas')
-      tempCanvas.width = cols
-      tempCanvas.height = rows
-      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true })
-      if (!tempCtx) return
-
-      tempCtx.drawImage(
-        img,
-        0, 0, img.width, img.height,
-        0, 0, cols, rows
-      )
-
-      const imageData = tempCtx.getImageData(0, 0, cols, rows)
-
       ctx.fillStyle = '#111111'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
@@ -82,7 +106,6 @@ export function AsciiCanvasEffect() {
       ctx.textBaseline = 'middle'
 
       const textColor = '#f4e9c9'
-      const backgroundColor = '#111111'
 
       const glitchIntensity = 0.02
       const glitchActive = Math.sin(time * 5) > 0.95
@@ -108,6 +131,19 @@ export function AsciiCanvasEffect() {
       
       let anyDistortedThisFrame = false;
 
+      const stepX = scaledWidth / cols;
+      const stepY = scaledHeight / rows;
+      const startX = offsetX + cellSize / 2;
+      const startY = offsetY + cellSize / 2;
+
+      ctx.fillStyle = textColor;
+
+      // --- GYORSÍTÁS 2: Gyorsabb intro időzítő (0.015 -> 0.03) ---
+      if (introRef.current > 0) {
+        introRef.current -= 0.03;
+        if (introRef.current < 0) introRef.current = 0;
+      }
+
       for (let y = 0; y < rows; y++) {
         const rowGlitch = glitchActive && random(y + time * 100) < glitchIntensity
         const rgbShift = rowGlitch ? Math.floor((random(y + time * 50) - 0.5) * 10) : 0
@@ -120,14 +156,14 @@ export function AsciiCanvasEffect() {
           const sampleY = Math.max(0, Math.min(rows - 1, y + Math.floor(jitterY)))
           
           const i = (sampleY * cols + sampleX) * 4
-          let r = imageData.data[i]
-          let g = imageData.data[i + 1]
-          let b = imageData.data[i + 2]
+          
+          let r = imageDataArray[i]
+          let g = imageDataArray[i + 1]
+          let b = imageDataArray[i + 2]
 
           if (rowGlitch && rgbShift !== 0) {
             const shiftedX = Math.max(0, Math.min(cols - 1, x + rgbShift))
-            const ri = (sampleY * cols + shiftedX) * 4
-            r = imageData.data[ri]
+            r = imageDataArray[(sampleY * cols + shiftedX) * 4]
           }
 
           const brightness = (r + g + b) / 3
@@ -144,10 +180,9 @@ export function AsciiCanvasEffect() {
           const char = chars[charIndex]
 
           const isTextPixel = mappedBrightness > 30
-          ctx.fillStyle = isTextPixel ? textColor : backgroundColor
           
-          const px = offsetX + (x * cellSize * scaledWidth) / (cols * cellSize) + cellSize / 2 + jitterX
-          const py = offsetY + (y * cellSize * scaledHeight) / (rows * cellSize) + cellSize / 2 + jitterY
+          const px = startX + x * stepX + jitterX
+          const py = startY + y * stepY + jitterY
 
           const idx = (y * cols + x) * 4
           let dispX = phys[idx]
@@ -155,7 +190,7 @@ export function AsciiCanvasEffect() {
           let velX = phys[idx + 2]
           let velY = phys[idx + 3]
 
-          if (mouseX > -100) {
+          if (mouseX > -100 && introRef.current < 0.2) {
             if (px > minLineX && px < maxLineX && py > minLineY && py < maxLineY) {
               let t = 0;
               if (l2 > 0) {
@@ -182,21 +217,24 @@ export function AsciiCanvasEffect() {
             }
           }
 
+          let isFlying = false;
+
           if (Math.abs(dispX) > 0.05 || Math.abs(dispY) > 0.05 || Math.abs(velX) > 0.05 || Math.abs(velY) > 0.05) {
             dispX += velX
             dispY += velY
             
-            // --- SOKKAL GYORSABB VISSZAÁLLÁS ---
-            velX *= 0.50 // Erősebb fék: hamarabb megáll a "robbanás" után
+            velX *= 0.50 
             velY *= 0.50 
 
-            const returnDecay = 0.75; // SOKKAL gyorsabb visszasodródás az eredeti helyre (0.90 volt)
+            // --- GYORSÍTÁS 3: Sokkal keményebb "mágnes" vonzza be őket (max 0.93 a korábbi 0.97 helyett) ---
+            const returnDecay = 0.75 + (introRef.current * 0.18); 
             dispX *= returnDecay;
             dispY *= returnDecay;
 
-            // Kicsit nagyobb bepattintási zóna, hogy érezhetően gyorsabban érjen véget az animáció
             if (Math.abs(dispX) < 0.5 && Math.abs(dispY) < 0.5 && Math.abs(velX) < 0.5 && Math.abs(velY) < 0.5) {
               dispX = 0; dispY = 0; velX = 0; velY = 0;
+            } else {
+              isFlying = true;
             }
 
             phys[idx] = dispX;
@@ -210,15 +248,14 @@ export function AsciiCanvasEffect() {
             : char
 
           if (char !== ' ') {
-            const isFlying = Math.abs(dispX) > 0.5 || Math.abs(dispY) > 0.5;
             let finalChar = displayChar;
 
             if (isFlying) {
               finalChar = chars[Math.floor(Math.random() * chars.length)];
-              ctx.fillStyle = textColor; 
+              ctx.fillText(finalChar, px + dispX, py + dispY);
+            } else if (isTextPixel) {
+              ctx.fillText(finalChar, px + dispX, py + dispY);
             }
-
-            ctx.fillText(finalChar, px + dispX, py + dispY)
           }
         }
       }
@@ -257,7 +294,6 @@ export function AsciiCanvasEffect() {
           extraParticlesRef.current.splice(i, 1);
         } else {
           ctx.globalAlpha = p.life;
-          ctx.fillStyle = textColor;
           ctx.fillText(p.char, p.x, p.y);
         }
       }
@@ -302,8 +338,19 @@ export function AsciiCanvasEffect() {
     window.addEventListener('mousemove', handleMouseMove)
     canvas.addEventListener('mouseleave', handleMouseLeave)
 
-    if (img.complete) animate()
-    else img.onload = animate
+    const startIntroEffect = () => {
+      resizeCanvas()
+      animate()
+      setTimeout(() => {
+        setIsVisible(true); 
+      }, 100);
+    }
+
+    if (img.complete) {
+      startIntroEffect();
+    } else {
+      img.onload = startIntroEffect;
+    }
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)
@@ -325,6 +372,11 @@ export function AsciiCanvasEffect() {
       <canvas
         ref={canvasRef}
         className="w-full h-full block"
+        style={{
+          opacity: isVisible ? 1 : 0, 
+          // --- GYORSÍTÁS 4: CSS fade-in sebessége 2 mp-ről 1 mp-re csökkentve ---
+          transition: 'opacity 1s ease-in-out', 
+        }}
       />
     </div>
   )

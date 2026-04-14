@@ -5,9 +5,10 @@ import btsImage1 from './assets/krue_bts_1.jpg'
 import btsImage2 from './assets/krue_bts_2.jpg'
 import btsImage3 from './assets/project2.jpg'
 import btsImage4 from './assets/project1.jpg'
-import btsImage5 from './assets/black.jpg'
+import btsImage5 from './assets/project3.jpg'
+import btsImage6 from './assets/black.jpg'
 import logoImage from './assets/Krue8x.png'
-import { useState } from 'react'
+import { useState, useEffect } from 'react' // <-- useEffect hozzáadva
 
 export default function App() {
   const [formData, setFormData] = useState({
@@ -15,6 +16,17 @@ export default function App() {
     email: '',
     message: ''
   })
+
+  // --- ÚJ: A nyíl áttűnésének vezérlése ---
+  const [isArrowVisible, setIsArrowVisible] = useState(false)
+
+  useEffect(() => {
+    // 2 másodpercet várunk, mire az ASCII logó összeáll, utána úszik be a nyíl
+    const timer = setTimeout(() => {
+      setIsArrowVisible(true)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,13 +49,13 @@ export default function App() {
     },
     {
       name: "21ROSE - BITCHES COME N GO",
-      url: "#",
+      url: "https://www.youtube.com/watch?v=m3H8n351yp8",
       image: btsImage5
     },
     {
       name: "21ROSE - AZ ÉN HIBÁM",
       url: "#",
-      image: btsImage5
+      image: btsImage6
     }
   ]
 
@@ -61,8 +73,14 @@ export default function App() {
           <MobileAsciiCanvasEffect />
         </div>
       
-      {/* --- KATTINTHATÓ MINIMALISTA LEFELÉ NYÍL --- */}
-        <div className="absolute bottom-20 md:bottom-3 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center">
+      {/* --- KATTINTHATÓ MINIMALISTA LEFELÉ NYÍL IDŐZÍTETT ÁTTŰNÉSSEL --- */}
+        <div 
+          className="absolute bottom-20 md:bottom-3 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center"
+          style={{ 
+            opacity: isArrowVisible ? 1 : 0, 
+            transition: 'opacity 1.5s ease-in-out' 
+          }}
+        >
           <a 
             href="#about" 
             className="group transition-all duration-300 hover:scale-110 active:scale-95"

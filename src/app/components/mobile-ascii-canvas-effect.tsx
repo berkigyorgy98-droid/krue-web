@@ -332,7 +332,7 @@ export function MobileAsciiCanvasEffect() {
       <canvas
         ref={canvasRef}
         className="w-full h-full block"
-        style={{ touchAction: 'none' }} 
+        style={{ touchAction: 'pan-y' }} 
       />
     </div>
   )
